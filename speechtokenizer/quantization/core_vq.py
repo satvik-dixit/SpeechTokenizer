@@ -320,6 +320,10 @@ class ResidualVectorQuantization(nn.Module):
         self.layers = nn.ModuleList(
             [VectorQuantization(**kwargs) for _ in range(num_quantizers)]
         )
+        self.linear_layers = []
+        for i in range(num_quantizers):
+            self.linear_layers.append(torch.nn.Linear(codebook_dim, codebook_dim))
+            self.linear_layers.append(torch.nn.Linear(codebook_dim, codebook_dim))
 
     def forward(self, x, n_q: tp.Optional[int] = None, layers: tp.Optional[list] = None):
         quantized_out = 0.0
@@ -332,7 +336,13 @@ class ResidualVectorQuantization(nn.Module):
         n_q = n_q or len(self.layers)
 
         for i, layer in enumerate(self.layers[:n_q]):
-            quantized, indices, loss = layer(residual)
+            
+            pre_lin_layer = self.linear_layers[2*i]
+            transformed_residual = pre_lin_layer(residual)
+            quantized, indices, loss = layer(transformed_residual)
+            post_lin_layer = self.linear_layers[2*i+1]
+            residual = post_lin_layer(transformed_residual)
+
             residual = residual - quantized
             quantized_out = quantized_out + quantized
 
